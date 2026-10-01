@@ -1,2 +1,4 @@
 @echo off
-python "%~dp0src\main.py"
+set PY=python
+where py >nul 2>nul && set PY=py
+%PY% "%~dp0src\main.py" %*

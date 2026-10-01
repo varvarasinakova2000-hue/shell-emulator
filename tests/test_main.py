@@ -1,12 +1,56 @@
 """Тесты парсера и команд эмулятора."""
 
+import contextlib
+import io
 import os
-import sys
+import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+from src.main import execute, parse_args, parse_command, read_script
 
-from main import execute, parse_command  # noqa: E402
+
+class TestArgs(unittest.TestCase):
+    """Проверка параметров командной строки."""
+
+    def test_no_params(self):
+        """Без параметров оба значения не заданы."""
+        params = parse_args([])
+        self.assertIsNone(params.vfs)
+        self.assertIsNone(params.script)
+
+    def test_all_params(self):
+        """Путь к VFS и к стартовому скрипту."""
+        params = parse_args(["--vfs", "my_vfs", "--script", "start.txt"])
+        self.assertEqual(params.vfs, "my_vfs")
+        self.assertEqual(params.script, "start.txt")
+
+    def test_unknown_param(self):
+        """Неизвестный параметр — ошибка argparse."""
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit):
+                parse_args(["--unknown", "x"])
+        self.assertIn("unrecognized arguments: --unknown x", stderr.getvalue())
+
+
+class TestScript(unittest.TestCase):
+    """Проверка чтения стартового скрипта."""
+
+    def test_skips_comments_and_empty_lines(self):
+        """Комментарии и пустые строки не попадают в список команд."""
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".txt", delete=False, encoding="utf-8"
+        ) as file:
+            file.write("# комментарий\nls -l\n\n  cd /home  \n")
+        try:
+            self.assertEqual(read_script(file.name), ["ls -l", "cd /home"])
+        finally:
+            os.remove(file.name)
+
+    def test_missing_script(self):
+        """Несуществующий скрипт — ошибка OSError."""
+        with self.assertRaises(OSError):
+            read_script("not_found.txt")
 
 
 class TestParser(unittest.TestCase):
